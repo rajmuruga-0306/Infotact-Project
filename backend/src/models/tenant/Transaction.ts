@@ -6,7 +6,7 @@ export interface ITransaction extends Document {
   idempotencyKey: string;
   requestHash: string;
   type: TransactionType;
-  amountMinor: number;
+  amountMinor: bigint;
   currency: string;
   resource: string;
   status: TransactionStatus;
@@ -14,7 +14,7 @@ export interface ITransaction extends Document {
   signatureKeyId: string;
   createdBy: string;
   originalTransactionId?: Types.ObjectId;
-  refundedAmountMinor: number;
+  refundedAmountMinor: bigint;
   metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -40,10 +40,11 @@ export const TransactionSchema = new Schema<ITransaction>(
       required: true,
     },
     amountMinor: {
-      type: Number,
+      type: BigInt,
       required: true,
+      cast: '{VALUE} is not an integer (amountMinor must be a positive integer in minor currency units)',
       validate: {
-        validator: (val: number) => Number.isInteger(val) && val > 0,
+        validator: (val: bigint) => val > 0n,
         message: 'amountMinor must be a positive integer in minor currency units',
       },
     },
@@ -63,7 +64,7 @@ export const TransactionSchema = new Schema<ITransaction>(
     },
     status: {
       type: String,
-      enum: ['PENDING', 'SUCCEEDED', 'FAILED', 'ROLLED_BACK'],
+      enum: ['PENDING', 'POSTED', 'SUCCEEDED', 'FAILED', 'ROLLED_BACK'],
       required: true,
       default: 'PENDING',
       index: true,
@@ -89,11 +90,12 @@ export const TransactionSchema = new Schema<ITransaction>(
       index: true,
     },
     refundedAmountMinor: {
-      type: Number,
+      type: BigInt,
       required: true,
-      default: 0,
+      default: 0n,
+      cast: '{VALUE} is not an integer (refundedAmountMinor must be a non-negative integer)',
       validate: {
-        validator: (val: number) => Number.isInteger(val) && val >= 0,
+        validator: (val: bigint) => val >= 0n,
         message: 'refundedAmountMinor must be a non-negative integer',
       },
     },
@@ -105,6 +107,16 @@ export const TransactionSchema = new Schema<ITransaction>(
     timestamps: true,
     toJSON: {
       transform: (_doc, ret: Record<string, unknown>) => {
+        for (const k of Object.keys(ret)) {
+          if (typeof ret[k] === 'bigint') {
+            const val = ret[k] as bigint;
+            if (val >= BigInt(Number.MIN_SAFE_INTEGER) && val <= BigInt(Number.MAX_SAFE_INTEGER)) {
+              ret[k] = Number(val);
+            } else {
+              ret[k] = val.toString();
+            }
+          }
+        }
         return ret;
       },
     },

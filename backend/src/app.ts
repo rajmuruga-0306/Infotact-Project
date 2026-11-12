@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { randomUUID } from 'node:crypto';
 import { env } from './config/env.js';
 import { authRoutes } from './modules/auth/index.js';
+import { ledgerRouter } from './modules/ledger/index.js';
 
 // Extend Express Request type to include rawBody and requestId
 declare global {
@@ -70,6 +71,7 @@ app.use(cookieParser());
 
 // Mount API routes
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/ledger', ledgerRouter);
 
 // Basic health check route
 app.get('/health', (_req: Request, res: Response) => {

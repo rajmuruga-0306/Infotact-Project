@@ -209,7 +209,15 @@ export function createVerifyTenantSignatureMiddleware(options: VerifyTenantSigna
     }
 
     // 6. Build canonical request string
-    const rawBodyBuffer = req.rawBody || (req.body ? Buffer.from(JSON.stringify(req.body)) : Buffer.from(''));
+    let rawBodyBuffer: Buffer;
+    if (req.rawBody && req.rawBody.length > 0) {
+      rawBodyBuffer = req.rawBody;
+    } else if (req.body && Object.keys(req.body).length > 0) {
+      rawBodyBuffer = Buffer.from(JSON.stringify(req.body));
+    } else {
+      rawBodyBuffer = Buffer.from('');
+    }
+
     const canonical = buildCanonicalRequestString(
       req.method,
       req.originalUrl || req.url,

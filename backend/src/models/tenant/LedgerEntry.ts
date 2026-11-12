@@ -6,8 +6,8 @@ export interface ILedgerEntry extends Document {
   transactionId: Types.ObjectId;
   accountRef: string;
   direction: LedgerDirection;
-  amountMinor: number;
-  balanceAfterMinor: number;
+  amountMinor: bigint;
+  balanceAfterMinor: bigint;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,26 +32,34 @@ export const LedgerEntrySchema = new Schema<ILedgerEntry>(
       required: true,
     },
     amountMinor: {
-      type: Number,
+      type: BigInt,
       required: true,
+      cast: '{VALUE} is not an integer (amountMinor must be a positive integer in minor currency units)',
       validate: {
-        validator: (val: number) => Number.isInteger(val) && val > 0,
+        validator: (val: bigint) => val > 0n,
         message: 'amountMinor must be a positive integer in minor currency units',
       },
     },
     balanceAfterMinor: {
-      type: Number,
+      type: BigInt,
       required: true,
-      validate: {
-        validator: Number.isInteger,
-        message: 'balanceAfterMinor must be an integer in minor currency units',
-      },
+      cast: '{VALUE} is not an integer (balanceAfterMinor must be an integer in minor currency units)',
     },
   },
   {
     timestamps: true,
     toJSON: {
       transform: (_doc, ret: Record<string, unknown>) => {
+        for (const k of Object.keys(ret)) {
+          if (typeof ret[k] === 'bigint') {
+            const val = ret[k] as bigint;
+            if (val >= BigInt(Number.MIN_SAFE_INTEGER) && val <= BigInt(Number.MAX_SAFE_INTEGER)) {
+              ret[k] = Number(val);
+            } else {
+              ret[k] = val.toString();
+            }
+          }
+        }
         return ret;
       },
     },

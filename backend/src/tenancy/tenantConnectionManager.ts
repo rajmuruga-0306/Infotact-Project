@@ -84,9 +84,16 @@ export class TenantConnectionManager {
     // Await connection readiness
     await conn.asPromise();
 
-    // 4. Initialize tenant models bound to this connection
+    // 4. Initialize tenant models bound to this connection and pre-create collections/indexes
     const models = getTenantModels(conn);
-    await models.initializeAccounts();
+    await Promise.all([
+      models.Account.init(),
+      models.Transaction.init(),
+      models.LedgerEntry.init(),
+      models.UsageRecord.init(),
+      models.TenantAuditLog.init(),
+      models.initializeAccounts(),
+    ]);
 
     const pooled: PooledTenantConnection = {
       orgId,

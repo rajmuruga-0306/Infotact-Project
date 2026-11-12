@@ -6,9 +6,11 @@ export { VIRTUAL_CLEARING_ACCOUNT };
 export interface IAccount extends Document {
   _id: Types.ObjectId;
   accountRef: string;
-  balanceMinor: number;
-  creditLimitMinor: number;
-  monthlyLimitMinor: number;
+  balanceMinor: bigint;
+  creditLimitMinor: bigint;
+  monthlyLimitMinor: bigint;
+  currentMonth: string;
+  currentMonthSpendMinor: bigint;
   currency: string;
   version: number;
   createdAt: Date;
@@ -25,30 +27,45 @@ export const AccountSchema = new Schema<IAccount>(
       index: true,
     },
     balanceMinor: {
-      type: Number,
+      type: BigInt,
       required: true,
-      default: 0,
-      validate: {
-        validator: Number.isInteger,
-        message: 'balanceMinor must be an integer (minor currency units)',
-      },
+      default: 0n,
+      cast: '{VALUE} is not an integer (balanceMinor must be an integer)',
     },
     creditLimitMinor: {
-      type: Number,
+      type: BigInt,
       required: true,
-      default: 0,
+      default: 0n,
+      cast: '{VALUE} is not an integer (creditLimitMinor must be a non-negative integer)',
       validate: {
-        validator: (val: number) => Number.isInteger(val) && val >= 0,
+        validator: (val: bigint) => val >= 0n,
         message: 'creditLimitMinor must be a non-negative integer',
       },
     },
     monthlyLimitMinor: {
-      type: Number,
+      type: BigInt,
       required: true,
-      default: 10000000, // Default 100,000 USD (in cents)
+      default: 10000000n, // Default 100,000 USD (in cents)
+      cast: '{VALUE} is not an integer (monthlyLimitMinor must be a non-negative integer)',
       validate: {
-        validator: (val: number) => Number.isInteger(val) && val >= 0,
+        validator: (val: bigint) => val >= 0n,
         message: 'monthlyLimitMinor must be a non-negative integer',
+      },
+    },
+    currentMonth: {
+      type: String,
+      required: true,
+      default: () => new Date().toISOString().slice(0, 7),
+      trim: true,
+    },
+    currentMonthSpendMinor: {
+      type: BigInt,
+      required: true,
+      default: 0n,
+      cast: '{VALUE} is not an integer (currentMonthSpendMinor must be a non-negative integer)',
+      validate: {
+        validator: (val: bigint) => val >= 0n,
+        message: 'currentMonthSpendMinor must be a non-negative integer',
       },
     },
     currency: {
@@ -67,6 +84,16 @@ export const AccountSchema = new Schema<IAccount>(
     optimisticConcurrency: true,
     toJSON: {
       transform: (_doc, ret: Record<string, unknown>) => {
+        for (const k of Object.keys(ret)) {
+          if (typeof ret[k] === 'bigint') {
+            const val = ret[k] as bigint;
+            if (val >= BigInt(Number.MIN_SAFE_INTEGER) && val <= BigInt(Number.MAX_SAFE_INTEGER)) {
+              ret[k] = Number(val);
+            } else {
+              ret[k] = val.toString();
+            }
+          }
+        }
         return ret;
       },
     },
@@ -83,19 +110,22 @@ export function getAccountModel(conn: Connection) {
 export async function initializeTenantAccounts(
   conn: Connection,
   currency: string = 'USD',
-  creditLimitMinor: number = 0,
-  monthlyLimitMinor: number = 10000000
+  creditLimitMinor: bigint | number = 0n,
+  monthlyLimitMinor: bigint | number = 10000000n
 ): Promise<{ primary: IAccount; virtualClearing: IAccount }> {
   const Account = getAccountModel(conn);
+  const currentMonth = new Date().toISOString().slice(0, 7);
 
   // 1. Primary Tenant Account
   let primary = await Account.findOne({ accountRef: 'PRIMARY' });
   if (!primary) {
     primary = await Account.create({
       accountRef: 'PRIMARY',
-      balanceMinor: 0,
-      creditLimitMinor,
-      monthlyLimitMinor,
+      balanceMinor: 0n,
+      creditLimitMinor: BigInt(creditLimitMinor),
+      monthlyLimitMinor: BigInt(monthlyLimitMinor),
+      currentMonth,
+      currentMonthSpendMinor: 0n,
       currency,
     });
   }
@@ -105,9 +135,11 @@ export async function initializeTenantAccounts(
   if (!virtualClearing) {
     virtualClearing = await Account.create({
       accountRef: VIRTUAL_CLEARING_ACCOUNT,
-      balanceMinor: 0,
-      creditLimitMinor: 0,
-      monthlyLimitMinor: 0,
+      balanceMinor: 0n,
+      creditLimitMinor: 0n,
+      monthlyLimitMinor: 0n,
+      currentMonth,
+      currentMonthSpendMinor: 0n,
       currency,
     });
   }

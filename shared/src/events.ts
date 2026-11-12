@@ -5,6 +5,7 @@
 
 export const SOCKET_EVENTS = {
   TRANSACTION_CREATED: 'transaction:created',
+  TRANSACTION_POSTED: 'transaction:posted',
   TRANSACTION_SUCCEEDED: 'transaction:succeeded',
   TRANSACTION_FAILED: 'transaction:failed',
   TRANSACTION_ROLLED_BACK: 'transaction:rolled_back',
@@ -19,7 +20,7 @@ export interface TransactionCreatedPayload {
   transactionId: string;
   idempotencyKey: string;
   type: 'charge' | 'refund';
-  amountMinor: number;
+  amountMinor: number | string;
   currency: string;
   resource: string;
   status: 'PENDING';
@@ -30,10 +31,10 @@ export interface TransactionSucceededPayload {
   transactionId: string;
   idempotencyKey: string;
   type: 'charge' | 'refund';
-  amountMinor: number;
+  amountMinor: number | string;
   currency: string;
-  balanceAfterMinor: number;
-  status: 'SUCCEEDED';
+  balanceAfterMinor: number | string;
+  status: 'POSTED' | 'SUCCEEDED';
   completedAt: string;
 }
 

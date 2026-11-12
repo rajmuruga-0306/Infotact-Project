@@ -9,15 +9,17 @@ export const VIRTUAL_CLEARING_ACCOUNT = 'PLATFORM_CLEARING';
 
 export type TransactionType = 'charge' | 'refund';
 
-export type TransactionStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'ROLLED_BACK';
+export type TransactionStatus = 'PENDING' | 'POSTED' | 'FAILED' | 'ROLLED_BACK' | 'SUCCEEDED';
 
 export type LedgerDirection = 'DEBIT' | 'CREDIT';
 
 export interface Account {
   _id: string;
-  balanceMinor: number;
-  creditLimitMinor: number;
-  monthlyLimitMinor: number;
+  balanceMinor: number | string;
+  creditLimitMinor: number | string;
+  monthlyLimitMinor: number | string;
+  currentMonth: string;
+  currentMonthSpendMinor: number | string;
   currency: string;
   version: number;
   updatedAt: string;
@@ -28,7 +30,7 @@ export interface Transaction {
   idempotencyKey: string;
   requestHash: string;
   type: TransactionType;
-  amountMinor: number;
+  amountMinor: number | string;
   currency: string;
   resource: string;
   status: TransactionStatus;
@@ -41,7 +43,7 @@ export interface Transaction {
    * Total refunds cannot exceed original transaction amount.
    */
   originalTransactionId?: string;
-  refundedAmountMinor?: number;
+  refundedAmountMinor?: number | string;
 }
 
 export interface LedgerEntry {
@@ -53,16 +55,50 @@ export interface LedgerEntry {
    */
   accountRef: string;
   direction: LedgerDirection;
-  amountMinor: number;
-  balanceAfterMinor: number;
+  amountMinor: number | string;
+  balanceAfterMinor: number | string;
   createdAt: string;
 }
 
 export interface BalanceResponse {
-  balanceMinor: number;
-  creditLimitMinor: number;
-  monthlyLimitMinor: number;
-  availableMinor: number;
+  balanceMinor: number | string;
+  creditLimitMinor: number | string;
+  monthlyLimitMinor: number | string;
+  currentMonth: string;
+  currentMonthSpendMinor: number | string;
+  availableMinor: number | string;
   currency: string;
   asOf: string;
+}
+
+/**
+ * Safely converts a number, bigint, or numeric string to native BigInt.
+ */
+export function toBigIntMinor(val: bigint | number | string): bigint {
+  if (typeof val === 'bigint') return val;
+  if (typeof val === 'number') {
+    if (!Number.isInteger(val)) {
+      throw new Error(`Invalid minor currency unit: floating point numbers are prohibited (${val})`);
+    }
+    return BigInt(val);
+  }
+  if (typeof val === 'string') {
+    if (!/^-?\d+$/.test(val.trim())) {
+      throw new Error(`Invalid minor currency unit string: '${val}'`);
+    }
+    return BigInt(val.trim());
+  }
+  throw new Error(`Unsupported type for minor unit: ${typeof val}`);
+}
+
+/**
+ * Serializes a BigInt minor unit safely:
+ * Returns number if within IEEE 754 safe integer range, or string otherwise.
+ */
+export function serializeMinorUnit(val: bigint | number | string): number | string {
+  const b = toBigIntMinor(val);
+  if (b >= BigInt(Number.MIN_SAFE_INTEGER) && b <= BigInt(Number.MAX_SAFE_INTEGER)) {
+    return Number(b);
+  }
+  return b.toString();
 }

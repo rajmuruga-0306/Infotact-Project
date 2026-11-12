@@ -33,7 +33,7 @@ describe('Dynamic Tenant Connection Manager Unit Tests', () => {
     // Verify accounts were automatically initialized
     const primary = await conn1.models.Account.findOne({ accountRef: 'PRIMARY' });
     expect(primary).not.toBeNull();
-    expect(primary!.balanceMinor).toBe(0);
+    expect(primary!.balanceMinor).toBe(0n);
 
     manager.releaseConnection(org1._id);
     expect(conn1.activeOperations).toBe(0);
