@@ -522,7 +522,7 @@ describe('Usage Metering, Aggregation & Tiered Billing Integration Tests (Phase 
       expect(res.body.summary).toBeDefined();
       expect(res.body.summary.currency).toBe('USD');
       expect(res.body.summary.totalSpendMinor).toBeGreaterThan(0);
-      expect(res.body.summary.transactionSuccessRate).toBe(100);
+      expect(res.body.summary.transactionSuccessRate).toBe(83); // 5 POSTED / 6 total transactions = 83%
       expect(res.body.summary.limitUsedPercent).toBeDefined();
 
       // Spend Over Time

@@ -44,8 +44,10 @@ export function getRedisClient(customUrl?: string): Redis {
     });
 
     redisInstance.on('error', (err) => {
-      // eslint-disable-next-line no-console
-      console.error('[Redis Client Error]:', err.message);
+      if (process.env.NODE_ENV !== 'test') {
+        // eslint-disable-next-line no-console
+        console.error('[Redis Client Error]:', err.message);
+      }
     });
 
     registerLuaCommands(redisInstance);
