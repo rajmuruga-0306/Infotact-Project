@@ -11,6 +11,7 @@ import {
   requireRole,
   createRateLimiter,
   csrfProtect,
+  getRefreshTokenCookieOptions,
 } from '../src/gateway/index.js';
 import { getRedisClient, revokeFamily } from '../src/redis/client.js';
 
@@ -301,6 +302,41 @@ describe('Gateway Security & Authentication Tests (Phase 2 Gate)', () => {
       expect(afterRes.status).toBe(401);
       expect(afterRes.body.error.code).toBe('TOKEN_REVOKED');
     });
+
+    it('fails closed with a controlled 503 response if Redis is unreachable during revocation check', async () => {
+      const brokenRedis = new Redis({
+        host: '127.0.0.1',
+        port: 1,
+        maxRetriesPerRequest: 0,
+        retryStrategy: () => null,
+        connectTimeout: 200,
+        lazyConnect: true,
+      });
+      brokenRedis.on('error', () => {});
+
+      const failingAuthMiddleware = createAuthenticateMiddleware(jwtService, brokenRedis);
+      const failingApp = express();
+      failingApp.use(express.json());
+      failingApp.get('/test/failclosed', failingAuthMiddleware, (_req, res) => res.json({ status: 'ok' }));
+
+      const token = jwtService.signAccessToken({
+        userId: 'usr_fail_closed',
+        orgId: 'org_fail_closed',
+        role: 'ORG_ADMIN',
+        email: 'failclosed@test.com',
+        familyId: 'fam_fail_closed',
+      });
+
+      const res = await request(failingApp)
+        .get('/test/failclosed')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(503);
+      expect(res.body.error.code).toBe('AUTH_SERVICE_UNAVAILABLE');
+      expect(res.body.error.message).toContain('Authentication verification service temporarily unavailable');
+
+      brokenRedis.disconnect();
+    });
   });
 
   describe('Role-Based Access Control (RBAC)', () => {
@@ -387,6 +423,58 @@ describe('Gateway Security & Authentication Tests (Phase 2 Gate)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('csrf-passed');
+    });
+
+    it('configures cookie for development environment with SameSite: lax and secure: false', () => {
+      const origEnv = process.env.NODE_ENV;
+      const origDomain = process.env.COOKIE_DOMAIN;
+      try {
+        process.env.NODE_ENV = 'development';
+        delete process.env.COOKIE_DOMAIN;
+        const opts = getRefreshTokenCookieOptions();
+        expect(opts.httpOnly).toBe(true);
+        expect(opts.secure).toBe(false);
+        expect(opts.sameSite).toBe('lax');
+        expect(opts.path).toBe('/api/v1/auth');
+        expect((opts as Record<string, unknown>).domain).toBeUndefined();
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        process.env.COOKIE_DOMAIN = origDomain;
+      }
+    });
+
+    it('configures cookie for production custom same-site domain architecture (eTLD+1)', () => {
+      const origEnv = process.env.NODE_ENV;
+      const origDomain = process.env.COOKIE_DOMAIN;
+      try {
+        process.env.NODE_ENV = 'production';
+        process.env.COOKIE_DOMAIN = '.ledgerguard.com';
+        const opts = getRefreshTokenCookieOptions();
+        expect(opts.httpOnly).toBe(true);
+        expect(opts.secure).toBe(true);
+        expect(opts.sameSite).toBe('lax');
+        expect(opts.domain).toBe('.ledgerguard.com');
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        process.env.COOKIE_DOMAIN = origDomain;
+      }
+    });
+
+    it('configures cookie for production cross-site fallback with SameSite: none when no custom domain', () => {
+      const origEnv = process.env.NODE_ENV;
+      const origDomain = process.env.COOKIE_DOMAIN;
+      try {
+        process.env.NODE_ENV = 'production';
+        delete process.env.COOKIE_DOMAIN;
+        const opts = getRefreshTokenCookieOptions();
+        expect(opts.httpOnly).toBe(true);
+        expect(opts.secure).toBe(true);
+        expect(opts.sameSite).toBe('none');
+        expect((opts as Record<string, unknown>).domain).toBeUndefined();
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        process.env.COOKIE_DOMAIN = origDomain;
+      }
     });
   });
 });

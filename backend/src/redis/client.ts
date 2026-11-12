@@ -10,6 +10,7 @@ const __dirname = dirname(__filename);
 // Load Lua script contents
 const rateLimiterLua = readFileSync(resolve(__dirname, 'lua/rateLimiter.lua'), 'utf-8');
 const refreshTokenRotateLua = readFileSync(resolve(__dirname, 'lua/refreshTokenRotate.lua'), 'utf-8');
+const revokeFamilyLua = readFileSync(resolve(__dirname, 'lua/revokeFamily.lua'), 'utf-8');
 
 let redisInstance: Redis | null = null;
 
@@ -65,6 +66,11 @@ function registerLuaCommands(redis: Redis): void {
   redis.defineCommand('rotateRefreshTokenLua', {
     numberOfKeys: 3,
     lua: refreshTokenRotateLua,
+  });
+
+  redis.defineCommand('revokeFamilyLua', {
+    numberOfKeys: 2,
+    lua: revokeFamilyLua,
   });
 }
 
@@ -161,7 +167,7 @@ export async function rotateRefreshToken(
 }
 
 /**
- * Atomically revokes an entire refresh token family and marks its access tokens as revoked.
+ * Atomically revokes an entire refresh token family and marks its access tokens as revoked via Lua.
  */
 export async function revokeFamily(
   familyId: string,
@@ -169,35 +175,27 @@ export async function revokeFamily(
   client: Redis = getRedisClient()
 ): Promise<void> {
   const familyKey = `refresh_family:${familyId}`;
-  const allTokens = await client.smembers(familyKey);
+  const revokedKey = `revoked_family:${familyId}`;
 
-  const pipeline = client.pipeline();
-  for (const tHash of allTokens) {
-    pipeline.del(`refresh_token:${tHash}`);
-  }
-  pipeline.del(familyKey);
-  pipeline.set(`revoked_family:${familyId}`, '1', 'EX', revokeTTLSeconds);
-
-  await pipeline.exec();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (client as any).revokeFamilyLua(
+    familyKey,
+    revokedKey,
+    'refresh_token:',
+    revokeTTLSeconds.toString()
+  );
 }
 
 /**
  * Checks whether an access token family is revoked (Immediate Logout / Revocation Check).
- * Security condition: Fails closed (returns true / revoked) if Redis fails or key exists.
+ * Throws on network/connection failure so authenticate middleware can return a controlled 503.
  */
 export async function isFamilyRevoked(
   familyId: string,
   client: Redis = getRedisClient()
 ): Promise<boolean> {
-  try {
-    const exists = await client.exists(`revoked_family:${familyId}`);
-    return exists === 1;
-  } catch (err) {
-    // Fail closed: reject access if Redis state cannot be verified
-    // eslint-disable-next-line no-console
-    console.error(`[Security Fail-Closed]: Redis unreachable for family check '${familyId}'`, err);
-    return true;
-  }
+  const exists = await client.exists(`revoked_family:${familyId}`);
+  return exists === 1;
 }
 
 /**

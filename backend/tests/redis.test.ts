@@ -137,20 +137,32 @@ describe('Real Redis Client & Atomic Lua Scripts', () => {
       expect(revoked).toBe(true);
     });
 
-    it('explicit logout revokes family and access tokens immediately', async () => {
+    it('explicit logout revokes family and all active refresh tokens atomically via Lua', async () => {
       const familyId = 'fam_logout_300';
-      const token = 'hash_token_logout';
-      await storeInitialRefreshToken(token, familyId, { userId: 'usr_3' }, 3600, client);
+      const token1 = 'hash_token_logout_1';
+      const token2 = 'hash_token_logout_2';
+      await storeInitialRefreshToken(token1, familyId, { userId: 'usr_3' }, 3600, client);
+      // Simulate multiple active tokens in the same family
+      await client.sadd(`refresh_family:${familyId}`, token2);
+      await client.set(`refresh_token:${token2}`, JSON.stringify({ userId: 'usr_3', familyId }), 'EX', 3600);
 
       expect(await isFamilyRevoked(familyId, client)).toBe(false);
+      const beforeTokens = await client.smembers(`refresh_family:${familyId}`);
+      expect(beforeTokens).toHaveLength(2);
 
+      // Execute atomic Lua revocation
       await revokeFamily(familyId, 900, client);
 
+      // Verify family marker is set
       expect(await isFamilyRevoked(familyId, client)).toBe(true);
-      expect(await client.get(`refresh_token:${token}`)).toBeNull();
+      // Verify all tokens in family were wiped
+      const remainingTokens = await client.smembers(`refresh_family:${familyId}`);
+      expect(remainingTokens).toHaveLength(0);
+      expect(await client.get(`refresh_token:${token1}`)).toBeNull();
+      expect(await client.get(`refresh_token:${token2}`)).toBeNull();
     });
 
-    it('fails closed when Redis is unreachable during revocation check', async () => {
+    it('propagates error when Redis is unreachable during revocation check so gateway fails closed with 503', async () => {
       // Disconnected client that fails immediately without retrying
       const brokenClient = new Redis({
         host: '127.0.0.1',
@@ -162,8 +174,8 @@ describe('Real Redis Client & Atomic Lua Scripts', () => {
       });
       brokenClient.on('error', () => {}); // silence connection error output
 
-      const revoked = await isFamilyRevoked('any_family', brokenClient);
-      expect(revoked).toBe(true); // Must fail closed!
+      // Must reject so the calling gateway middleware can differentiate between 401 (revoked) and 503 (infra down)
+      await expect(isFamilyRevoked('any_family', brokenClient)).rejects.toThrow();
 
       brokenClient.disconnect();
     });

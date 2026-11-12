@@ -3,17 +3,30 @@ import { env } from '../config/env.js';
 
 /**
  * Returns standard cookie configuration for refresh tokens.
- * In production: Secure=true and SameSite=none (for cross-origin frontend-backend deployment).
- * In local development: Secure=false and SameSite=lax (for localhost HTTP development).
+ *
+ * PRODUCTION ARCHITECTURE & THIRD-PARTY COOKIE ADVISORY:
+ * Modern browsers (Safari ITP, Chrome Privacy Sandbox, Firefox ETP) block or partition
+ * cross-site third-party cookies by default (e.g., frontend on vercel.app calling backend on render.com).
+ * For 100% reliable production delivery, custom domains sharing a common eTLD+1 are recommended:
+ * e.g., app.ledgerguard.com (frontend) and api.ledgerguard.com (API gateway), using SameSite: 'lax' and Domain: '.ledgerguard.com'.
+ *
+ * Fallback cross-site configuration (when custom domain is absent):
+ * Uses Secure=true and SameSite='none'.
+ *
+ * In local development:
+ * Uses Secure=false and SameSite='lax' (for localhost HTTP).
  */
-export function getRefreshTokenCookieOptions() {
+export function getRefreshTokenCookieOptions(domainOverride?: string) {
   const isProd = process.env.NODE_ENV === 'production';
+  const cookieDomain = domainOverride || process.env.COOKIE_DOMAIN;
+
   return {
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? ('none' as const) : ('lax' as const),
+    sameSite: isProd ? (cookieDomain ? ('lax' as const) : ('none' as const)) : ('lax' as const),
     path: '/api/v1/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
   };
 }
 

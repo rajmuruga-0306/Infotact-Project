@@ -40,14 +40,29 @@ export function createAuthenticateMiddleware(customJwtService?: JwtService, cust
       // 1. Verify RS256 signature and token claims
       const payload = service.verifyAccessToken(token);
 
-      // 2. Immediate Revocation Check in Redis (Fail-Closed)
+      // 2. Immediate Revocation Check in Redis (Fail-Closed with 503 on Redis failure)
       if (payload.familyId) {
-        const revoked = await isFamilyRevoked(payload.familyId, customRedisClient);
-        if (revoked) {
-          res.status(401).json({
+        try {
+          const revoked = await isFamilyRevoked(payload.familyId, customRedisClient);
+          if (revoked) {
+            res.status(401).json({
+              error: {
+                code: 'TOKEN_REVOKED',
+                message: 'Session has been logged out or terminated',
+                requestId,
+              },
+            });
+            return;
+          }
+        } catch (redisErr: unknown) {
+          // Fail closed with controlled 503 Service Unavailable response:
+          // Differentiates infrastructure failure from an invalid token
+          // eslint-disable-next-line no-console
+          console.error(`[Security Fail-Closed]: Redis unreachable for family check '${payload.familyId}'`, redisErr);
+          res.status(503).json({
             error: {
-              code: 'TOKEN_REVOKED',
-              message: 'Session has been logged out or terminated',
+              code: 'AUTH_SERVICE_UNAVAILABLE',
+              message: 'Authentication verification service temporarily unavailable',
               requestId,
             },
           });
