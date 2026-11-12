@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.git/
+*.log
+.env*
+!*.env.example
+*.pem
+*.key
+frontend/
+docs/
+tests/
