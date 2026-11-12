@@ -4,3 +4,4 @@ export * from './rbac.js';
 export * from './rateLimit.js';
 export * from './csrfProtect.js';
 export * from './validate.js';
+export * from './verifyTenantSignature.js';
