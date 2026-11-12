@@ -23,8 +23,11 @@ export const envSchema = z.object({
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
 
   // API Gateway JWT (RS256)
+  JWT_KEY_ID: z.string().default('lg-gw-1'),
   JWT_PRIVATE_KEY: z.string().min(1, 'JWT_PRIVATE_KEY (Base64 PEM) is required'),
   JWT_PUBLIC_KEY: z.string().min(1, 'JWT_PUBLIC_KEY (Base64 PEM) is required'),
+  JWT_PREVIOUS_KEY_ID: z.string().optional(),
+  JWT_PREVIOUS_PUBLIC_KEY: z.string().optional(),
   JWT_ISSUER: z.string().default('ledgerguard-gateway'),
   JWT_AUDIENCE: z.string().default('ledgerguard-api'),
   JWT_EXPIRES_IN: z.coerce.number().int().positive().default(900),

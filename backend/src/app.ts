@@ -1,8 +1,10 @@
 import express, { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { randomUUID } from 'node:crypto';
 import { env } from './config/env.js';
+import { authRoutes } from './modules/auth/index.js';
 
 // Extend Express Request type to include rawBody and requestId
 declare global {
@@ -62,6 +64,12 @@ app.use(
     },
   })
 );
+
+// Cookie parser for HttpOnly session and refresh token management
+app.use(cookieParser());
+
+// Mount API routes
+app.use('/api/v1/auth', authRoutes);
 
 // Basic health check route
 app.get('/health', (_req: Request, res: Response) => {

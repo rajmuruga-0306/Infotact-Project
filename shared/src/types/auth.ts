@@ -5,32 +5,41 @@ export interface AuthContext {
   orgId: string;
   role: UserRole;
   email: string;
+  familyId: string;
 }
 
 export interface User {
   _id: string;
-  orgId: string;
   email: string;
-  role: UserRole;
+  fullName: string;
   isActive: boolean;
   lastLoginAt?: string;
   createdAt: string;
 }
 
+export interface OrganizationMembership {
+  _id: string;
+  userId: string;
+  orgId: string;
+  role: UserRole;
+  status: 'ACTIVE' | 'SUSPENDED';
+  createdAt: string;
+}
+
 export interface LoginResponse {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string; // May also be set purely via HttpOnly cookie
   expiresIn: number;
   user: {
     id: string;
     email: string;
-    role: UserRole;
-    orgId: string;
+    fullName: string;
   };
   organization: {
     id: string;
     name: string;
     slug: string;
+    role: UserRole;
   };
 }
 
@@ -44,11 +53,10 @@ export interface RegisterOrgResponse {
   user: {
     id: string;
     email: string;
-    role: UserRole;
+    fullName: string;
   };
-  /**
-   * Returned ONLY ONCE if the server generated the keypair upon registration.
-   * The server never stores this private key.
-   */
-  privateKeyPem?: string;
+  membership: {
+    role: UserRole;
+    status: 'ACTIVE' | 'SUSPENDED';
+  };
 }

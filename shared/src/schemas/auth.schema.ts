@@ -9,11 +9,12 @@ export const registerOrgSchema = z.object({
     .regex(/^[a-z0-9-]+$/, 'Slug must contain only lowercase alphanumeric characters and hyphens'),
   adminEmail: z.string().email('Invalid email address'),
   adminPassword: z.string().min(12, 'Password must be at least 12 characters'),
+  adminFullName: z.string().min(2, 'Full name must be at least 2 characters').max(100),
   /**
-   * Optional client-provided RSA public key (PEM format).
-   * If omitted, server generates a keypair and returns privateKeyPem once.
+   * Client-generated RSA-256 public key in PEM format.
+   * Generated client-side using Web Crypto. Server never receives private key.
    */
-  publicKeyPem: z.string().optional(),
+  publicKeyPem: z.string().min(50, 'Valid RSA public key in PEM format is required'),
 });
 
 export type RegisterOrgInput = z.infer<typeof registerOrgSchema>;
