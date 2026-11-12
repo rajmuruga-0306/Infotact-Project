@@ -6,6 +6,10 @@ export interface IUsageRecord extends Document {
   units: number;
   costMinor: bigint;
   ts: Date;
+  idempotencyKey?: string;
+  billed: boolean;
+  transactionId?: Types.ObjectId;
+  rateTierApplied?: unknown;
   metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +46,26 @@ export const UsageRecordSchema = new Schema<IUsageRecord>(
       default: Date.now,
       index: true,
     },
+    idempotencyKey: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+    },
+    billed: {
+      type: Boolean,
+      required: true,
+      default: true,
+      index: true,
+    },
+    transactionId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Transaction',
+      index: true,
+    },
+    rateTierApplied: {
+      type: Schema.Types.Mixed,
+    },
     metadata: {
       type: Schema.Types.Mixed,
     },
@@ -50,6 +74,12 @@ export const UsageRecordSchema = new Schema<IUsageRecord>(
     timestamps: true,
     toJSON: {
       transform: (_doc, ret: Record<string, unknown>) => {
+        if (ret._id) {
+          ret._id = ret._id.toString();
+        }
+        if (ret.transactionId) {
+          ret.transactionId = ret.transactionId.toString();
+        }
         for (const k of Object.keys(ret)) {
           if (typeof ret[k] === 'bigint') {
             const val = ret[k] as bigint;
@@ -67,6 +97,8 @@ export const UsageRecordSchema = new Schema<IUsageRecord>(
 );
 
 UsageRecordSchema.index({ resource: 1, ts: -1 });
+UsageRecordSchema.index({ resource: 1, billed: 1, ts: -1 });
+UsageRecordSchema.index({ billed: 1, ts: -1 });
 
 export function getUsageRecordModel(conn: Connection) {
   return conn.model<IUsageRecord>('UsageRecord', UsageRecordSchema);

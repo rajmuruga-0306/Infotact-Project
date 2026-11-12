@@ -2,8 +2,37 @@ export interface UsageRecord {
   _id: string;
   resource: string;
   units: number;
-  costMinor: number;
+  costMinor: number | string;
   ts: string;
+  idempotencyKey?: string;
+  billed: boolean;
+  transactionId?: string;
+  rateTierApplied?: unknown;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PricingTier {
+  upToUnits: number | null; // null means Infinity (unlimited / top tier)
+  unitPriceMinor: number | string; // cost per 1 unit in minor currency units
+}
+
+export interface ResourcePricingPlan {
+  resource: string;
+  pricingModel: 'GRADUATED' | 'VOLUME' | 'FLAT';
+  tiers: PricingTier[];
+  currency: string;
+}
+
+export interface TierBreakdownItem {
+  tierIndex: number;
+  unitsInTier: number;
+  unitPriceMinor: number | string;
+  tierCostMinor: number | string;
+}
+
+export interface TierCalculationResult {
+  totalCostMinor: number | string;
+  breakdown: TierBreakdownItem[];
 }
 
 export interface AuditLog {
