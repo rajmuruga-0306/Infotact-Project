@@ -79,6 +79,7 @@ export interface UsageUpdatedPayload {
 
 export interface ServerToClientEvents {
   [SOCKET_EVENTS.TRANSACTION_CREATED]: (payload: TransactionCreatedPayload) => void;
+  [SOCKET_EVENTS.TRANSACTION_POSTED]: (payload: TransactionSucceededPayload) => void;
   [SOCKET_EVENTS.TRANSACTION_SUCCEEDED]: (payload: TransactionSucceededPayload) => void;
   [SOCKET_EVENTS.TRANSACTION_FAILED]: (payload: TransactionFailedPayload) => void;
   [SOCKET_EVENTS.TRANSACTION_ROLLED_BACK]: (payload: TransactionRolledBackPayload) => void;

@@ -17,6 +17,7 @@ import { ledgerService, LedgerService } from '../ledger/ledgerService.js';
 import { defaultPricingEngine, PricingEngine } from './pricingEngine.js';
 import { acquireDistributedLock, releaseDistributedLock } from '../../redis/lock.js';
 import { getRedisClient } from '../../redis/client.js';
+import { broadcastUsageUpdated } from '../../websocket/index.js';
 
 export interface RecordUsageParams {
   input: RecordUsageInput;
@@ -172,6 +173,18 @@ export class UsageService {
     });
 
     await usageDoc.save();
+
+    // Broadcast WebSocket usage update
+    try {
+      broadcastUsageUpdated(orgId, {
+        resource: input.resource,
+        units: input.units,
+        costMinor: Number(costMinor),
+        ts: usageDoc.ts.toISOString(),
+      });
+    } catch {
+      // Non-blocking socket broadcast
+    }
 
     // 7. Write to TenantAuditLog
     await models.TenantAuditLog.create({

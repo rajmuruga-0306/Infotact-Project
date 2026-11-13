@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { createHash, createSign, createVerify, randomUUID } from 'node:crypto';
 import { Redis } from 'ioredis';
 import { getRedisClient } from '../redis/client.js';
+import { broadcastSecurityAlert } from '../websocket/index.js';
 
 export interface TenantSignatureHeaders {
   signature: string;
@@ -185,6 +186,18 @@ export function createVerifyTenantSignatureMiddleware(options: VerifyTenantSigna
     try {
       const setSuccess = await redis.set(nonceKey, '1', 'EX', ttlSeconds, 'NX');
       if (!setSuccess) {
+        try {
+          broadcastSecurityAlert(orgId, {
+            type: 'REPLAY_ATTACK',
+            severity: 'high',
+            message: `Replay attack detected: nonce '${nonce}' has already been used`,
+            requestId,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch {
+          // Non-blocking
+        }
+
         res.status(401).json({
           error: {
             code: 'REPLAY_ATTACK_DETECTED',
@@ -233,6 +246,18 @@ export function createVerifyTenantSignatureMiddleware(options: VerifyTenantSigna
       const isValid = verifier.verify(org.publicKeyPem, signature, 'base64');
 
       if (!isValid) {
+        try {
+          broadcastSecurityAlert(orgId, {
+            type: 'INVALID_SIGNATURE',
+            severity: 'high',
+            message: 'Cryptographic request signature verification failed',
+            requestId,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch {
+          // Non-blocking
+        }
+
         res.status(401).json({
           error: {
             code: 'INVALID_SIGNATURE',

@@ -1,9 +1,14 @@
+import { createServer } from 'node:http';
 import { app } from './app.js';
 import { env } from './config/env.js';
+import { initSocketServer } from './websocket/index.js';
 
-const server = app.listen(env.PORT, '0.0.0.0', () => {
+const httpServer = createServer(app);
+const io = initSocketServer(httpServer);
+
+const server = httpServer.listen(env.PORT, '0.0.0.0', () => {
   // eslint-disable-next-line no-console
-  console.log(`[LedgerGuard] Server listening on http://0.0.0.0:${env.PORT} (NODE_ENV=${env.NODE_ENV})`);
+  console.log(`[LedgerGuard] Server & WebSockets listening on http://0.0.0.0:${env.PORT} (NODE_ENV=${env.NODE_ENV})`);
 });
 
 // Graceful shutdown handling

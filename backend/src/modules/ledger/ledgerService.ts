@@ -16,6 +16,7 @@ import {
   releaseDistributedLock,
 } from '../../redis/lock.js';
 import { getRedisClient } from '../../redis/client.js';
+import { broadcastTransactionPosted, broadcastLimitWarning } from '../../websocket/index.js';
 
 export interface ProcessTransactionParams {
   input: CreateTransactionInput;
@@ -330,6 +331,36 @@ export class LedgerService {
             throw new Error('LOCK_LOST: Redis distributed lock ownership was lost during processing. Transaction aborted.');
           }
         });
+
+        // Broadcast WebSocket Events
+        try {
+          const account = await models.Account.findOne({ accountRef: 'PRIMARY' });
+          broadcastTransactionPosted(orgId, {
+            transactionId: committedTxn!._id.toString(),
+            idempotencyKey: committedTxn!.idempotencyKey,
+            type: committedTxn!.type,
+            amountMinor: serializeMinorUnit(committedTxn!.amountMinor),
+            currency: committedTxn!.currency,
+            balanceAfterMinor: serializeMinorUnit(account?.balanceMinor ?? 0n),
+            status: 'POSTED',
+            completedAt: new Date().toISOString(),
+          });
+
+          if (account && account.monthlyLimitMinor > 0n) {
+            const percentUsed = Math.round(Number((account.currentMonthSpendMinor * 100n) / account.monthlyLimitMinor));
+            if (percentUsed >= 80) {
+              broadcastLimitWarning(orgId, {
+                orgId,
+                currentSpendMinor: Number(account.currentMonthSpendMinor),
+                monthlyLimitMinor: Number(account.monthlyLimitMinor),
+                percentUsed,
+                warnedAt: new Date().toISOString(),
+              });
+            }
+          }
+        } catch {
+          // Non-blocking socket broadcast
+        }
 
         return committedTxn!;
       } catch (err: unknown) {
