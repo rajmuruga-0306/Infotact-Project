@@ -4,7 +4,7 @@ import { env } from './config/env.js';
 import { initSocketServer } from './websocket/index.js';
 
 const httpServer = createServer(app);
-const io = initSocketServer(httpServer);
+initSocketServer(httpServer);
 
 const server = httpServer.listen(env.PORT, '0.0.0.0', () => {
   // eslint-disable-next-line no-console

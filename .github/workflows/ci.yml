@@ -24,6 +24,9 @@ jobs:
       - name: Clean install dependencies
         run: npm ci
 
+      - name: Build shared workspace
+        run: npm run build --workspace=shared
+
       - name: Code formatting and linting
         run: npm run lint
 

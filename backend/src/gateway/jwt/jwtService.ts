@@ -87,10 +87,11 @@ export class JwtService {
    * Verifies an RS256 access token with pinned algorithm and key ID resolution.
    * Hard-rejects alg: none and HMAC algorithm confusion attacks.
    */
-  verifyAccessToken(token: string): TokenPayload {
+  verifyAccessToken(token: string): DecodedAccessToken {
     // 1. Inspect header without verifying signature to resolve kid
     const decodedComplete = jwt.decode(token, { complete: true });
-    if (!decodedComplete || typeof decodedComplete === 'string' || !decodedComplete.header) {
+
+    if (!decodedComplete || typeof decodedComplete === 'string') {
       throw new Error('MALFORMED_TOKEN: Unable to decode token header');
     }
 
@@ -104,23 +105,48 @@ export class JwtService {
     // Resolve public key by kid
     const lookupKid = kid || this.activeKeyId;
     const publicKey = this.publicKeysByKid.get(lookupKid);
+
     if (!publicKey) {
       throw new Error(`UNKNOWN_KEY_ID: No public key registered for kid '${lookupKid}'`);
     }
 
     // 2. Cryptographic signature and claim verification pinned strictly to RS256
     const verified = jwt.verify(token, publicKey, {
-      algorithms: ['RS256'], // Pinned algorithms prevent HMAC confusion
+      algorithms: ['RS256'],
       issuer: env.JWT_ISSUER,
       audience: env.JWT_AUDIENCE,
-    }) as jwt.JwtPayload;
+    });
+
+    if (typeof verified === 'string') {
+      throw new Error('INVALID_TOKEN: Expected a JWT claims object');
+    }
+
+    // 3. Validate all required claims
+    if (
+      typeof verified.sub !== 'string' ||
+      typeof verified.iss !== 'string' ||
+      typeof verified.aud !== 'string' ||
+      typeof verified.exp !== 'number' ||
+      typeof verified.iat !== 'number' ||
+      typeof verified.orgId !== 'string' ||
+      typeof verified.role !== 'string' ||
+      typeof verified.email !== 'string' ||
+      typeof verified.familyId !== 'string'
+    ) {
+      throw new Error('INVALID_TOKEN_CLAIMS: Required JWT claims are missing or invalid');
+    }
 
     return {
-      userId: verified.sub as string,
-      orgId: verified.orgId as string,
+      userId: verified.sub,
+      orgId: verified.orgId,
       role: verified.role as UserRole,
-      email: verified.email as string,
-      familyId: verified.familyId as string,
+      email: verified.email,
+      familyId: verified.familyId,
+      iss: verified.iss,
+      aud: verified.aud,
+      sub: verified.sub,
+      exp: verified.exp,
+      iat: verified.iat,
     };
   }
 
